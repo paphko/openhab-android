@@ -11,6 +11,7 @@ package org.openhab.habdroid.ui;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
@@ -22,6 +23,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.DisplayMetrics;
@@ -33,6 +35,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.NumberPicker;
@@ -515,17 +518,59 @@ public class WidgetAdapter extends RecyclerView.Adapter<WidgetAdapter.ViewHolder
 
     public static class TextViewHolder extends LabeledItemBaseViewHolder {
         private final ImageView mRightArrow;
+        private final Context mContext;
+        private Item mBoundItem;
 
         TextViewHolder(LayoutInflater inflater, ViewGroup parent,
                 Connection conn, ColorMapper colorMapper) {
             super(inflater, parent, R.layout.widgetlist_textitem, conn, colorMapper);
             mRightArrow = itemView.findViewById(R.id.right_arrow);
+            mRightArrow.setOnTouchListener(this);
+            mContext = parent.getContext();
         }
 
         @Override
         public void bind(Widget widget) {
             super.bind(widget);
+            mBoundItem = widget.item();
             mRightArrow.setVisibility(widget.linkedPage() != null ? View.VISIBLE : View.GONE);
+        }
+        @Override
+        public boolean onTouch(View view, MotionEvent motionEvent) {
+            if (motionEvent.getActionMasked() == MotionEvent.ACTION_UP) {
+                promptForText(mBoundItem.label(), mContext, text ->
+                        Util.sendItemCommand(mConnection.getAsyncHttpClient(), mBoundItem, text));
+            }
+            return false;
+        }
+
+        private static interface TextHandler {
+            void handleText(String text);
+        }
+
+        private void promptForText(String title, Context context, TextHandler handler) {
+            final AlertDialog.Builder builder = new AlertDialog.Builder(context);
+            builder.setTitle(title);
+
+            final EditText input = new EditText(context);
+            input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_LONG_MESSAGE);
+            builder.setView(input);
+
+            builder.setPositiveButton("Send", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    final String text = input.getText().toString();
+                    handler.handleText(text);
+                }
+            });
+            builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.cancel();
+                }
+            });
+
+            builder.show();
         }
     }
 
